@@ -1,0 +1,5 @@
+*.pptx
+*.pkl
+seoul_scenario/
+venv-sumo/
+__pycache__/
