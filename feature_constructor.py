@@ -39,6 +39,8 @@ class FeatureConstructor(object):
         self.d_entropy = self.build_diffusion_entropy_map()
         self.TT = None
         self.OD = None
+        self.supply_maps = None
+        self.demand_maps = None
 
 
     def action_space_iter(self, x, y):
@@ -79,16 +81,38 @@ class FeatureConstructor(object):
         self.t = traci.simulation.getTime()
 
     # TO DO Check the number of idle and occupied vehicles from global vehicles list
-    def update_supply(self, vehicles, duration=MIN_DISPATCH_CYCLE * 2): ##### need to fix vehicle state dictionary first.
+    def update_supply(self, duration=MIN_DISPATCH_CYCLE * 2): ##### need to fix vehicle state dictionary first.
         # vehicles = ray.get_actor("vehicles_list")
         vehicles_actor = ray.get_actor("vehicles_actor")
         vehicles = ray.get(vehicles_actor.getVehicleList.remote())
-        idle = vehicles[(vehicles.status == status_codes.IDLE)]
-        occupied = vehicles[vehicles.status == status_codes.ASSIGNED] #####
-        occupied = occupied[occupied.time_to_destination <= duration] #####
-        idle_map = self.construct_supply_map(idle[["lon", "lat"]].values) ##### 
-        dropoff_map = self.construct_supply_map(occupied[["destination_lon", "destination_lat"]].values) #####
-        print("++++++++ idle : {} occupied : {}".format(idle,occupied))
+        # idle = vehicles[(vehicles.status == status_codes.IDLE)]
+        idle = []
+        occupied = []
+        idle_coords = []
+        occupied_cords = []
+        vehicles_traci=traci.vehicle.getIDList()
+        print(vehicles_traci)
+        for veh in vehicles.values():
+            veh_id = -1
+            try:
+                veh_id = vehicles_traci.index(veh.id)
+            except ValueError:
+                pass
+            if veh.state == 'IDLE' and veh_id != -1:
+                lon,lat = traci.vehicle.getPosition(vehicles_traci[veh_id])
+                idle.append(veh)
+                idle_coords.append((lon,lat))
+            elif veh.state == "ASSIGNED" and veh_id != -1:
+                occupied.append(veh)
+                lon,lat = traci.vehicle.getPosition(vehicles_traci[veh_id])
+                occupied_cords.append((lat,lon))
+                
+        # occupied = vehicles[vehicles.status == status_codes.ASSIGNED] #####
+        # occupied = occupied[occupied.time_to_destination <= duration] #####
+        print("++++++++ {}".format(idle_coords))
+        idle_map = self.construct_supply_map(idle_coords) ##### get lat and longitude from traci done
+        dropoff_map = self.construct_supply_map(occupied_cords) #####
+        print("++++++++ idle : {} occupied : {}".format(len(idle),len(occupied)))
         self.supply_maps = [idle_map, dropoff_map] 
         self.diffused_supply = [] 
         for s in self.supply_maps: 
@@ -131,10 +155,12 @@ class FeatureConstructor(object):
         t = self.get_current_time()
         f = self.get_current_fingerprint()
         l = (x, y)
+        print("inside construct_current_feratures : {}".format(l))
         s, actions = self.construct_features(t, f, l, M)
         return s, actions
 
     def construct_features(self, t, f, l, M):
+        print("inside construct_feratures : {}".format(l))
         state_feature = self.construct_state_feature(t, f, l, M)
         actions, action_features = self.construct_action_features(t, l, M)
         s = (state_feature, action_features)
@@ -142,6 +168,7 @@ class FeatureConstructor(object):
 
     def construct_state_feature(self, t, f, l, M):
         x, y = l
+        print("inside construct_state_feratures : {}".format(l))
         state_feature = [m.mean() for m in M[:NUM_SUPPLY_DEMAND_MAPS]]
         state_feature += [m[x, y] for m in M]
         state_feature += [m[x, y] for m in self.d_entropy]
@@ -184,6 +211,9 @@ class FeatureConstructor(object):
         return self.DT[x, y, ax + MAX_MOVE, ay + MAX_MOVE]
 
     def get_supply_demand_maps(self):
+        t = traci.simulation.getTime()
+        self.update_supply()
+        self.update_demand(t)
         supply_demand_maps = self.supply_maps + self.demand_maps
         diffused_maps = self.diffused_supply + self.diffused_demand
         return supply_demand_maps + diffused_maps
@@ -194,7 +224,9 @@ class FeatureConstructor(object):
     def construct_supply_map(self, locations):
         supply_map = self.construct_initial_map()
         for lon, lat in locations:
+            print("longitude latitute {} {}".format(lon,lat))
             x, y = mesh.convert_lonlat_to_xy(lon, lat) #####
+            print("x y {} {}".format(x,y))
             supply_map[x, y] += 1.0
         return supply_map
     # TO DO convert severn days to one day only pending

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+# from db import engine
 from config_settings import MAP_WIDTH, MAP_HEIGHT
 import os
 import sys
@@ -85,8 +86,9 @@ class DemandLoader(object):
             x += self.timestep / 3600.0
             demand.append(d)
 
-        latest_demand = self.load_latest_demand(t - self.timestep, t)
+        latest_demand = self.load_latest_demand()
         return demand[1:], demand[0] - latest_demand
+        # return demand[1:], demand[0] #ignore latest_demand
 
     def __compute_demand(self, x, d):
         return ((d[1] - d[0]) * x + (d[0] + d[1]) / 2) / 3600.0 * self.timestep * self.amplification_factor
@@ -97,36 +99,44 @@ class DemandLoader(object):
         if len(self.hourly_demand) == 0 or self.current_time != current_time:
             if current_time < 6:
                 self.current_time = current_time 
-                self.hourly_demand = [self.load_demand_profile(current_time) for i in range(max_hours)]
+                self.hourly_demand = [self.load_demand_profile(t = i) for i in range(max_hours)]
 
         x = (localtime*60 - 30) / 60.0
         return x
 
-    @staticmethod
-    def load_demand_profile(self, t): # get demand per time charge xy
+    # @staticmethod
+    def load_demand_profile(self,t): # get demand per time charge xy
         demand = []
         t_demand = list(self.demand[t -1])
         
-        street2edge = DemandLoader.Street2Edge(t_demand)
+        street2edge = Street2Edge(t_demand)
        
         for e_id in street2edge:
-            EdgeXY = DemandLoader.EdgeXY(e_id)
-            demand.append(EdgeXY)
+            edgexy = EdgeXY(e_id)
+            demand.append(edgexy)
             
         M = np.zeros((MAP_WIDTH, MAP_HEIGHT))
         for (x, y) in demand:  
             M[x, y] += 1  
         return M
 
-    @staticmethod
-    def load_latest_demand(t_start, t_end):
-        query = """
-            SELECT x, y, demand
-            FROM demand_latest
-            WHERE t > {t_start} and t  < = {t_end};
-                """.format(t_start = t_start, t_end = t_end)
-        demand = pd.read_sql(query, engine, index_col=["x", "y"]).demand
-        M = np.zeros((MAP_WIDTH, MAP_HEIGHT))
-        for (x, y), c in demand.iteritems():
-            M[x, y] += c
-        return M
+    # @staticmethod
+    # def load_latest_demand(t_start, t_end):
+    #     query = """
+    #         SELECT x, y, demand
+    #         FROM demand_latest
+    #         WHERE t > {t_start} and t  < = {t_end};
+    #             """.format(t_start = t_start, t_end = t_end)
+    #     demand = pd.read_sql(query, engine, index_col=["x", "y"]).demand
+    #     M = np.zeros((MAP_WIDTH, MAP_HEIGHT))
+    #     for (x, y), c in demand.iteritems():
+    #         M[x, y] += c
+    #     return M
+
+    # @staticmethod
+    def load_latest_demand(self):
+        localtime = traci.simulation.getTime()
+        current_time = int(localtime // 3600)
+        demand = self.hourly_demand[current_time - 1]
+       
+        return demand

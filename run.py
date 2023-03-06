@@ -46,8 +46,11 @@ class MyPreprocessorClass(Preprocessor):
         self.feature_constructor = FeatureConstructor()
        
     def transform(self, observation):
+        print("inside transform  : {}".format(observation))
         s = self.feature_constructor.construct_current_features(observation[0],observation[1])
         s_feature, a_features = s
+        # print(s_feature)
+        # print(len(s_feature))
         sa_input = np.array([s_feature + a_feature for a_feature in a_features], dtype=np.float32)
         return sa_input
    

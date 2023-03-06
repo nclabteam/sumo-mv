@@ -141,7 +141,9 @@ class SUMOSimulationWrapper(SUMOUtils):
         
         # every 3600s (1 hour) run dispatching
         if simtime % 3600 == 0:
+            print("inside simtime ")
             requests = demand_loader.load_demand() 
+            print("demand loaded")
             # agent_vehicle = list(veh_list)
             agent_vehicle = list(agent_veh_list)
             dispatching_commands = self.dispatching_policy.dispatch(agent_vehicle, requests)
@@ -150,7 +152,7 @@ class SUMOSimulationWrapper(SUMOUtils):
                 vid = command['vehicle_id']
                 self.traci_handler.vehicle.changeTarget(vid, request_edgeid)
                 # vehicle = vehicle_list[vid]
-                # print("======== changing state of {} to {}".format(vehicle.id,'assigned'))
+                print("======== changing state of {} to {}".format(vehicle.id,'assigned'))
                 # vehicle.set_assigned(request_edgeid, command['current_time'])
                 # vehicle_list[vid] = vehicle
                 # with open('vehicle_list.pkl', 'wb') as file:
@@ -158,7 +160,8 @@ class SUMOSimulationWrapper(SUMOUtils):
                 vehicles_actor = ray.get_actor("vehicles_actor")
                 print("======== changing state of {} to {}".format(vehicle.id,'assigned'))
                 vehicle = ray.get(vehicles_actor.get.remote(vid))
-                vehicle.set_state(vid, 'ASSIGNED', command['current_time']) ###################
+                vehicle.set_assigned(request_edgeid, command['current_time'])
+                # vehicle.set_state(vid, 'ASSIGNED', command['current_time']) ###################
                 vehicles_actor.set.remote(vehicle)
             logger.info("---------디스패칭된 차량 숫자, idle 한 차량 숫자--------")
                   
